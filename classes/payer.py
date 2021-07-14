@@ -1,7 +1,7 @@
 from classes.ca import generate_selfsigned_cert, get_public_key_object_from_cert_file, \
     get_private_key_object_from_private_byte, \
     sign, get_public_key_byte_from_cert_file, validate_sign
-from classes.const import pk_bank_byte
+from classes.const import pk_bank_byte, payer_id
 
 
 class Payer:
@@ -38,11 +38,15 @@ class Payer:
     def handle_payment_request(self, payment_request):
         bill, signed_bill, merchant_pk_certificate = payment_request
         merchant_pk = get_public_key_object_from_cert_file(merchant_pk_certificate)
+        nonce = int(bill.split("||")[-1])
         if validate_sign(merchant_pk, signed_bill, bill):
-            return True
-        return False
+            return True, nonce
+        return False, None
 
-    # TODO: ack merchant that we confirm payment request
+    # اینجا ورودیش در اصل nonce+1 فانکشن بالاست
+    def create_ack_payment_request(self, nonce):
+        message = (payer_id + "||" + str(nonce)).encode('utf-8')
+        return message, sign(self.private_key, message), self.cert_pem
 
 
 if __name__ == '__main__':
