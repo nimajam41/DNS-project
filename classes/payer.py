@@ -7,8 +7,7 @@ from classes.const import pk_bank_byte
 class Payer:
     def __init__(self, name='payer'):
         self.cert_pem, private_key_byte = generate_selfsigned_cert(subject_name=name)
-        self.public_key = get_public_key_object_from_cert_file(self.cert_pem), get_private_key_object_from_private_byte(
-            private_key_byte)
+        self.public_key = get_public_key_object_from_cert_file(self.cert_pem)
         self.private_key = get_private_key_object_from_private_byte(private_key_byte)
         self.cert_pem_wallet, private_key_file_wallet = generate_selfsigned_cert(subject_name='wallet_' + name)
         self.public_key_wallet_byte = get_public_key_byte_from_cert_file(self.cert_pem_wallet)
