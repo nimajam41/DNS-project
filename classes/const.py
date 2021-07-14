@@ -6,3 +6,4 @@ bank_id = 'fe5ce74a-ea73-4d0b-a2d7-073445c0856a'
 blockchain_port = 8001
 
 certs_path = os.path.abspath(os.curdir) + "/certs/"
+PRICE = 1000

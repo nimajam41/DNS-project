@@ -3,7 +3,7 @@ import os
 from ca import generate_selfsigned_cert, get_public_key_object_from_cert_file, \
     get_private_key_object_from_private_byte, \
     sign, get_public_key_byte_from_cert_file, validate_sign
-from const import payer_id, merchant_id, bank_id, blockchain_port, certs_path
+from const import payer_id, merchant_id, bank_id, blockchain_port, certs_path, PRICE
 from utils import generate_nonce
 
 import socket, ssl, pickle
@@ -82,11 +82,13 @@ class Payer:
     # p2.2
     def handle_payment_request(self, payment_request):
         bill, signed_bill, merchant_pk_certificate = payment_request
-        self.payment_price = bill.decode().split("||")
+        self.payment_price = int(bill.decode().split("||")[1])
         merchant_pk = get_public_key_object_from_cert_file(merchant_pk_certificate)
         self.merchant_pk = get_public_key_byte_from_cert_file(merchant_pk_certificate)
         nonce = int(bill.decode().split("||")[-1])
-        if validate_sign(merchant_pk, signed_bill, bill):
+        if self.payment_price != PRICE:
+            return False, None
+        elif validate_sign(merchant_pk, signed_bill, bill):
             return True, self.create_ack_payment_request(nonce + 1)
         return False, None
 
