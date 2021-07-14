@@ -42,12 +42,12 @@ class Merchant:
         pk_payer = get_public_key_object_from_cert_file(cert_payer)
         p_id, nonce = message.decode().split("||")
         if payer_id != p_id:
-            return False
+            return False, None
         if int(nonce) != int(self.payment_req_nonce) + 1:
-            return False
+            return False, None
         if not validate_sign(pk_payer, signed_message, message):
-            return False
-        return True
+            return False, None
+        return True, "we move to the next phase #p3"
 
 
 if __name__ == '__main__':
