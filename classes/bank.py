@@ -66,7 +66,7 @@ class Bank:
         return True, 'we move to the next stage #p4'
 
     # p4.1
-    def request_price(self, price_fiat):
+    def request_price(self, price_fiat=1000):
         self.resp_price_nonce = generate_nonce()
         return (str(price_fiat) + "||" + str(self.resp_price_nonce)).encode("utf-8")
 

@@ -94,14 +94,17 @@ class BlockChain:
         self.bank_transactions[key] = seq_number
         if not self.concession(pk_wallet, pk_bank, float(crypto_amount)):
             is_valid = False
-        resp_to_bank = self.transaction_rep_to_bank(is_valid, seq_number)
+        resp_to_bank = self.transaction_resp_to_bank(is_valid, seq_number)
         return is_valid, resp_to_bank
 
     # helper method for p4.4
-    def transaction_rep_to_bank(self, validate, seq_number):
+    def transaction_resp_to_bank(self, validate, seq_number):
         if validate is True:
             msg = "success" + str(uuid.uuid4().int) + "||" + str(seq_number)
-            return msg.encode("utf-8") , sign(self.private_key, msg.encode("utf-8")), self.cert_pem
+        else:
+            msg = "success" + str(uuid.uuid4().int) + "||" + str(seq_number)
+        return msg.encode("utf-8") , sign(self.private_key, msg.encode("utf-8")), self.cert_pem
+
 
 
 

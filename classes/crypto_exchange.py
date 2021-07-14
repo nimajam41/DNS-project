@@ -38,12 +38,9 @@ class CryptoExchange:
     def price(self, amount_source, dest_ex='BTC'):
         return amount_source / self.crypto_to_rial[dest_ex]
 
-    def aync_exchange(self):
-        pass
-
     # p4.2
     def resp_price_to_bank(self, msg):
         amount, nonce = msg.decode().split("||")
-        crypto_amount = self.price(amount_source=amount)
+        crypto_amount = self.price(amount_source=float(amount))
         resp = str(crypto_amount) + "||" + str(int(nonce) + 1)
         return resp.encode('utf-8'), sign(self.private_key, resp.encode('utf-8')), self.cert_pem
