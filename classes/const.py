@@ -5,3 +5,4 @@ bank_id = 'fe5ce74a-ea73-4d0b-a2d7-073445c0856a'
 certs_path = "certs/"
 blockchain_send_delegation_port = 8001
 payer_payment_request_port = 8002
+bank_send_preparation_port = 8003

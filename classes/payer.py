@@ -4,7 +4,8 @@ from threading import Thread
 from ca import generate_selfsigned_cert, get_public_key_object_from_cert_file, \
     get_private_key_object_from_private_byte, \
     sign, get_public_key_byte_from_cert_file, validate_sign
-from const import payer_id, merchant_id, payer_payment_request_port, bank_id, certs_path
+from const import payer_id, merchant_id, payer_payment_request_port, blockchain_send_delegation_port,\
+    bank_send_preparation_port, bank_id, certs_path
 from utils import generate_nonce
 import socket, ssl, pickle
 
@@ -78,7 +79,7 @@ class Payer:
     #p2.2
     def handle_payment_request(self, payment_request):
         bill, signed_bill, merchant_pk_certificate = payment_request
-        self.payment_price = bill.decode().split("||")
+        self.payment_price = bill.decode().split("||")[1]
         merchant_pk = get_public_key_object_from_cert_file(merchant_pk_certificate)
         self.merchant_pk = get_public_key_byte_from_cert_file(merchant_pk_certificate)
         nonce = int(bill.decode().split("||")[-1])
@@ -95,8 +96,8 @@ class Payer:
     # p3.1
     def create_payment_preparation(self):
         nonce1 = str(generate_nonce())
-        payment = payer_id + "||" + merchant_id + "||" + get_public_key_byte_from_cert_file(
-            self.cert_pem_wallet) + "||" + self.merchant_pk.decode() + "||" + self.payment_price + "||" + nonce1
+        payment = payer_id + "||" + merchant_id + "||" + get_public_key_byte_from_cert_file(self.cert_pem_wallet).decode() + "||" + self.merchant_pk.decode()
+        payment = payment + "||" + self.payment_price + "||" + nonce1
         message = payment.encode('utf-8'), sign(self.private_key, payment.encode('utf-8')), self.cert_pem
         self.payment_preparation_nonce1 = nonce1
         return message
@@ -104,7 +105,7 @@ class Payer:
     def ack_ack_payment_preparation(self, message):
         is_valid = True
         verification_ack, signed_verification, cert_bank = message
-        b_id, nonce1, nonce2 = verification_ack
+        b_id, nonce1, nonce2 = verification_ack.decode().split("||")
         if b_id != bank_id:
             is_valid = False
         if int(nonce1) - 1 != int(self.payment_preparation_nonce1):
@@ -112,10 +113,10 @@ class Payer:
         if not validate_sign(get_public_key_object_from_cert_file(cert_bank), signed_verification, verification_ack):
             is_valid = False
         if not is_valid:
-            return False, None
+            return False
 
         verify_part = payer_id + "||" + str(int(nonce2) + 1)
-        return True, verify_part.encode('uft-8'), sign(self.private_key, verify_part.encode('utf-8')), self.cert_pem
+        return verify_part.encode('utf-8'), sign(self.private_key, verify_part.encode('utf-8')), self.cert_pem
 
     def send_delegation_to_blockchain(self, delegation):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -128,6 +129,24 @@ class Payer:
                 return self.handle_delegation_ack(ack)
             else:
                 print("Invalid Delegation Request")
+                return False
+
+    def send_preparation_to_blockchain(self, preparation):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            ssl_sock = ssl.wrap_socket(sock)
+            ssl_sock.connect(('localhost', bank_send_preparation_port))
+            ssl_sock.sendall(pickle.dumps(preparation))
+            res = ssl_sock.recv(4096)
+            ack = pickle.loads(res)
+            if not ack == "Invalid Request":
+                ack_ack = self.ack_ack_payment_preparation(ack)
+                if ack_ack:
+                    ssl_sock.sendall(pickle.dumps(ack_ack))
+                else:
+                    ssl_sock.sendall(pickle.dumps("Invalid Ack"))
+
+            else:
+                print("Invalid Preparation Request")
                 return False
 
     def run_payment_request_server(self):
@@ -144,8 +163,11 @@ class Payer:
                     data = conn.recv(4096)
                     payment_request = pickle.loads(data)
                     ack = self.handle_payment_request(payment_request)
-                    if ack != (False, None):
+                    if ack:
                         conn.sendall(pickle.dumps(ack))
+                        preparation = self.create_payment_preparation()
+                        self.send_preparation_to_blockchain(preparation)
+
                     else:
                         conn.sendall(pickle.dumps("Invalid Request"))
 
