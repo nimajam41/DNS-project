@@ -56,6 +56,7 @@ class Payer:
         self.payment_price = None
 
     # we assume we have bank's pk
+    # p1.1
     def create_delegation(self, range, count, timestamp, bank_public_key_file):
         policy = str(range) + "||" + str(count) + "||" + str(timestamp) + "||" + str(self.last_seq_number)
         policy = policy.encode('utf-8')
@@ -64,6 +65,7 @@ class Payer:
         return (
             bank_public_key_file, self.public_key_wallet_byte, policy, sign(self.private_key_wallet, message_to_sign))
 
+    #p1.3
     def handle_delegation_ack(self, message):
         seq_number, signed_message, pub_cer_blockchain = message
         pub_block_chain = get_public_key_object_from_cert_file(pub_cer_blockchain)
@@ -75,6 +77,7 @@ class Payer:
         return False
 
     # we assume price value is always correct (user will check it by its knowledge)
+    #p2.2
     def handle_payment_request(self, payment_request):
         bill, signed_bill, merchant_pk_certificate = payment_request
         self.payment_price = bill.decode().split("||")
@@ -86,10 +89,12 @@ class Payer:
         return False, None
 
     # اینجا ورودیش در اصل nonce+1 فانکشن بالاست
+    # p2.2
     def create_ack_payment_request(self, nonce):
         message = (payer_id + "||" + str(nonce)).encode('utf-8')
         return message, sign(self.private_key, message), self.cert_pem
 
+    # p3.1
     def create_payment_preparation(self):
         nonce1 = str(generate_nonce())
         payment = payer_id + "||" + merchant_id + "||" + get_public_key_byte_from_cert_file(
@@ -97,7 +102,7 @@ class Payer:
         message = payment.encode('utf-8'), sign(self.private_key, payment.encode('utf-8')), self.cert_pem
         self.payment_preparation_nonce1 = nonce1
         return message
-
+    # p3.4
     def ack_ack_payment_preparation(self, message):
         is_valid = True
         verification_ack, signed_verification, cert_bank = message

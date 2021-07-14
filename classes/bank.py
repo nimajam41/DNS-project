@@ -29,6 +29,7 @@ class Bank:
         self.merchant_pk = None
         self.payment_preparation_nonce2 = None
 
+    # p1.2
     def ack_payment_preparation(self, message):
         valid_message = True
         payment, signed_message, cert_payer = message
@@ -47,6 +48,7 @@ class Bank:
         verification = bank_id + "||" + str(nonce1 + 1) + "||" + self.payment_preparation_nonce2
         return True, verification.encode('utf-8'), sign(self.private_key, verification), self.cert_pem
 
+    # p1.4
     def handle_ack_ack_payment_preparation(self, message):
         is_valid = False
         verification_ack, signed_verification, cert_payer = message

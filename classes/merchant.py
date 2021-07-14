@@ -28,6 +28,7 @@ class Merchant:
         self.private_key = get_private_key_object_from_private_byte(private_key_byte)
         self.payment_req_nonce = None
 
+    # p2.1
     def create_payment_request(self, price):
         nonce = generate_nonce()
         bill = merchant_id + "||" + str(price) + "||" + str(nonce)
@@ -37,6 +38,7 @@ class Merchant:
         return bill, signed_bill, self.cert_pem
 
     # if return False we have to restart this step of protocol
+    # p2.3
     def handle_ack_payment_request(self, request):
         message, signed_message, cert_payer = request
         pk_payer = get_public_key_object_from_cert_file(cert_payer)

@@ -46,6 +46,7 @@ class BlockChain:
         }
         return True
 
+    # p1.2
     def handle_delegation(self, delegation_message):
         delegation_request_valid = True
         pk_file_bank, pk_wallet_user, policy, signed_message = delegation_message
@@ -64,7 +65,7 @@ class BlockChain:
                 return ack_del
         else:
             return None
-
+    # p1.2
     def ack_delegation(self, seq_number):
         message = (seq_number, sign(self.private_key, seq_number), self.cert_pem)
         return message
