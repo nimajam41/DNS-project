@@ -4,7 +4,7 @@ from ca import generate_selfsigned_cert, get_public_key_object_from_cert_file, \
     get_private_key_object_from_private_byte, \
     sign, get_public_key_byte_from_cert_file, validate_sign, get_public_key_object_from_public_byte
 from collections import defaultdict
-from const import pk_bank_byte, certs_path, cert_file
+from const import certs_path
 from datetime import datetime
 import socket, ssl, pickle
 

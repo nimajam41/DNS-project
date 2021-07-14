@@ -3,10 +3,10 @@ import os
 from ca import generate_selfsigned_cert, get_public_key_object_from_cert_file, \
     get_private_key_object_from_private_byte, \
     sign, get_public_key_byte_from_cert_file, validate_sign
-from classes.const import cert_file, payer_id, merchant_id
-from classes.utils import generate_nonce
+from const import payer_id, merchant_id
+from utils import generate_nonce
 
-from const import pk_bank_byte, payer_id, blockchain_port, certs_path
+from const import payer_id, blockchain_port, certs_path
 import socket, ssl, pickle
 
 class Payer:
@@ -101,7 +101,9 @@ class Payer:
 
 if __name__ == '__main__':
     p = Payer()
-    delegation = p.create_delegation(200, 2, 18526220589.27749, pk_bank_byte)
+    with open(certs_path + "bank.cert", "rb") as f:
+        pk_bank = f.read()
+    delegation = p.create_delegation(200, 2, 18526220589.27749, pk_bank)
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         s = ssl.wrap_socket(sock)
         s.connect(('localhost', blockchain_port))
