@@ -10,7 +10,8 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.exceptions import InvalidSignature
 
 
-def generate_selfsigned_cert(hostname, ip_addresses=None, key=None):
+def generate_selfsigned_cert(hostname='root', ip_addresses=None, key=None, subject_name=None):
+    subject_name = subject_name if subject_name is not None else hostname
     if key is None:
         key = rsa.generate_private_key(
             public_exponent=65537,
@@ -34,9 +35,12 @@ def generate_selfsigned_cert(hostname, ip_addresses=None, key=None):
 
     basic_contraints = x509.BasicConstraints(ca=True, path_length=0)
     now = datetime.utcnow()
+    subject_name = x509.Name([
+        x509.NameAttribute(NameOID.COMMON_NAME, subject_name)
+    ])
     cert = (
         x509.CertificateBuilder()
-            .subject_name(name)
+            .subject_name(subject_name)
             .issuer_name(name)
             .public_key(key.public_key())
             .serial_number(1000)
@@ -57,7 +61,7 @@ def generate_selfsigned_cert(hostname, ip_addresses=None, key=None):
 
 
 # return public_key file like to save
-def get_public_key_byte_cert_file(cert: x509.Certificate):
+def get_public_key_byte_from_cert_file(cert: x509.Certificate):
     return x509.load_pem_x509_certificate(cert, backend=default_backend()).public_key().public_bytes(
         encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo)
 
@@ -66,9 +70,11 @@ def get_public_key_byte_cert_file(cert: x509.Certificate):
 def get_public_key_object_from_cert_file(cert: x509.Certificate):
     return x509.load_pem_x509_certificate(cert, backend=default_backend()).public_key()
 
+def get_public_key_object_from_public_byte(key):
+    return serialization.load_pem_public_key(key, backend=default_backend())
 
 # return private_key object to work with
-def get_private_key_object_from_private_file(key_pem):
+def get_private_key_object_from_private_byte(key_pem):
     return serialization.load_pem_private_key(key_pem, password=None, backend=default_backend())
 
 
@@ -130,7 +136,8 @@ def validate_sign(public_key, signed_message, message):
 if __name__ == '__main__':
     cert, private_bytes = generate_selfsigned_cert('Merchant')
     public_key = get_public_key_object_from_cert_file(cert)
-    private_key = get_private_key_object_from_private_file(private_bytes)
+    print(get_public_key_byte_from_cert_file(cert))
+    private_key = get_private_key_object_from_private_byte(private_bytes)
     print(public_key)
     print(private_key)
     x = encrypt(public_key, message=b'salam')
