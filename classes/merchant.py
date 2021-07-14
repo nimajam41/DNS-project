@@ -27,7 +27,7 @@ class Merchant:
         p_id, nonce = message.decode().split("||")
         if payer_id != p_id:
             return False
-        if nonce != self.payment_req_nonce + 1:
+        if int(nonce) != int(self.payment_req_nonce) + 1:
             return False
         if not validate_sign(pk_payer, signed_message, message):
             return False

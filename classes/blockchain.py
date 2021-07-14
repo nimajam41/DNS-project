@@ -2,7 +2,7 @@ from classes.ca import generate_selfsigned_cert, get_public_key_object_from_cert
     get_private_key_object_from_private_byte, \
     sign, get_public_key_byte_from_cert_file, validate_sign, get_public_key_object_from_public_byte
 from collections import defaultdict
-from classes.const import pk_bank_byte
+from classes.const import cert_file
 from datetime import datetime
 
 
@@ -34,10 +34,11 @@ class BlockChain:
         delegation_request_valid = True
         pk_file_bank, pk_wallet_user, policy, signed_message = delegation_message
         wallet_pk_object = get_public_key_object_from_public_byte(pk_wallet_user)
-        if pk_file_bank != pk_bank_byte:
+        if pk_file_bank != get_public_key_byte_from_cert_file(cert_file):
             delegation_request_valid = False
         elif not validate_sign(wallet_pk_object, signed_message,
                                (pk_file_bank.decode() + "||" + policy.decode()).encode('utf-8')):
+            print('inja')
             delegation_request_valid = False
         elif len(policy.decode().split('||')) != 4:
             delegation_request_valid = False
