@@ -4,7 +4,7 @@ import socket, ssl, pickle
 from ca import generate_selfsigned_cert, get_public_key_object_from_cert_file, \
     get_private_key_object_from_private_byte, \
     sign, get_public_key_byte_from_cert_file, validate_sign
-from const import merchant_id, payer_id, payer_payment_request_port, certs_path
+from const import merchant_id, payer_id, payer_payment_request_port, certs_path, bank_id
 from utils import generate_nonce
 
 
@@ -29,6 +29,7 @@ class Merchant:
         self.public_key = get_public_key_object_from_cert_file(self.cert_pem)
         self.private_key = get_private_key_object_from_private_byte(private_key_byte)
         self.payment_req_nonce = None
+        self.payment_confirmation_nonce = None
 
     # p2.1
     def create_payment_request(self, price):
@@ -65,6 +66,28 @@ class Merchant:
             else:
                 print("Invalid Payment Request")
                 return False
+
+    # p5.1
+    def request_payment_confirmation(self):
+        self.payment_confirmation_nonce = generate_nonce()
+        req = (merchant_id + "||" + str(self.payment_confirmation_nonce)).encode('utf-8')
+        signed_part = sign(self.private_key, req)
+        return req, signed_part, self.cert_pem
+
+    # p5.3
+    def handle_response_payment_confirmation(self, message):
+        is_valid = True
+        res, signed_res, cert_bank = message
+        b_id, received_nonce, amount = res
+        if b_id != bank_id:
+            is_valid = False
+        elif int(received_nonce) != 1 + self.payment_confirmation_nonce:
+            is_valid = False
+        elif not validate_sign(get_public_key_object_from_cert_file(cert_bank), signed_res, res):
+            is_valid = False
+        if not is_valid:
+            return False, None
+        return True, 'end of protocol'
 
 
 if __name__ == '__main__':

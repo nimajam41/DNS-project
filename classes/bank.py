@@ -1,8 +1,7 @@
 import os
-import pickle
-import socket
-import ssl
+import pickle, socket, ssl
 from threading import Thread
+import random
 
 from ca import generate_selfsigned_cert, get_public_key_object_from_cert_file, \
     get_private_key_object_from_private_byte, \
@@ -85,6 +84,20 @@ class Bank:
                         print(ack_ack)
                     else:
                         conn.sendall(pickle.dumps("Invalid Request"))
+
+    # p5.2
+    def response_payment_confirmation(self, message):
+        is_valid = True
+        req, signed_req, cert_merchant = message
+        m_id, nonce = req.decode().split("||")
+        if m_id != merchant_id:
+            is_valid = False
+        elif not validate_sign(get_public_key_object_from_cert_file(cert_merchant), signed_req, req):
+            is_valid = False
+        if not is_valid:
+            return False, None
+        res = bank_id + "||" + str(int(nonce) + 1) + "||" + str(random.randint(0, 100000))
+        return True, res.encode('utf-8'), sign(self.private_key, res.encode('utf-8')), self.cert_pem
 
 
 if __name__ == "__main__":
