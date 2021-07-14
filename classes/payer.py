@@ -69,7 +69,9 @@ class Payer:
     def handle_delegation_ack(self, message):
         seq_number, signed_message, pub_cer_blockchain = message
         pub_block_chain = get_public_key_object_from_cert_file(pub_cer_blockchain)
-        if validate_sign(pub_block_chain, signed_message, seq_number):
+        if int(seq_number.decode()) != self.last_seq_number:
+            return False
+        elif validate_sign(pub_block_chain, signed_message, seq_number):
             self.last_seq_number += 1
             return True
 
@@ -77,7 +79,7 @@ class Payer:
         return False
 
     # we assume price value is always correct (user will check it by its knowledge)
-    #p2.2
+    # p2.2
     def handle_payment_request(self, payment_request):
         bill, signed_bill, merchant_pk_certificate = payment_request
         self.payment_price = bill.decode().split("||")
