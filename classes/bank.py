@@ -97,6 +97,7 @@ class Bank:
             is_valid = False
         if not is_valid:
             return False, None
+        self.transaction_seq_number += 1
         return True, "moving to 5th stage"
 
 

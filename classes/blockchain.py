@@ -89,7 +89,7 @@ class BlockChain:
         pk_wallet, pk_bank, transaction, signed_message = message
         key = (pk_bank, pk_wallet)
         crypto_amount, seq_number = transaction.decode().split("||")
-        if key in self.bank_transactions and int(seq_number) <= self.bank_transactions[key]:
+        if key in self.bank_transactions and int(seq_number) != 1 + self.bank_transactions[key]:
             is_valid = False
         self.bank_transactions[key] = seq_number
         if not self.concession(pk_wallet, pk_bank, float(crypto_amount)):
