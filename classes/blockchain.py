@@ -1,4 +1,5 @@
-from classes.ca import generate_selfsigned_cert, get_public_key_object_from_cert_file, get_private_key_object_from_private_byte, \
+from classes.ca import generate_selfsigned_cert, get_public_key_object_from_cert_file, \
+    get_private_key_object_from_private_byte, \
     sign, get_public_key_byte_from_cert_file, validate_sign, get_public_key_object_from_public_byte
 from collections import defaultdict
 from classes.const import pk_bank_byte
@@ -8,8 +9,7 @@ from datetime import datetime
 class BlockChain:
     def __init__(self, name='BlockChain'):
         self.cert_pem, private_key_byte = generate_selfsigned_cert(subject_name=name)
-        self.public_key = get_public_key_object_from_cert_file(self.cert_pem), get_private_key_object_from_private_byte(
-            private_key_byte)
+        self.public_key = get_public_key_object_from_cert_file(self.cert_pem)
         self.private_key = get_private_key_object_from_private_byte(private_key_byte)
         self.blocks = defaultdict(dict)
 
@@ -17,11 +17,16 @@ class BlockChain:
         key = (bank_public, wallet_public)
         if key in self.blocks and float(self.blocks[key]['timestamp']) > datetime.now().timestamp():
             return False
-        range, count, timestamp, _ = policy.split('||')
+        range, count, timestamp, seq_number = policy.split('||')
+
+        # possibly replay attack (we are waiting for last_seq_number + 1)
+        if key in self.blocks and self.blocks[key]['seq_number'] != seq_number - 1:
+            return False
         self.blocks[key] = {
             'range': range,
             'count': count,
-            'timestamp': timestamp
+            'timestamp': timestamp,
+            'seq_number': int(seq_number)
         }
         return True
 
@@ -31,7 +36,8 @@ class BlockChain:
         wallet_pk_object = get_public_key_object_from_public_byte(pk_wallet_user)
         if pk_file_bank != pk_bank_byte:
             delegation_request_valid = False
-        elif not validate_sign(wallet_pk_object, signed_message, (pk_file_bank.decode() + "||" + policy.decode()).encode('utf-8')):
+        elif not validate_sign(wallet_pk_object, signed_message,
+                               (pk_file_bank.decode() + "||" + policy.decode()).encode('utf-8')):
             delegation_request_valid = False
         elif len(policy.decode().split('||')) != 4:
             delegation_request_valid = False
@@ -50,6 +56,3 @@ class BlockChain:
 
     def concession(self):
         pass
-
-if __name__ == '__main__':
-    block_chain = BlockChain()
