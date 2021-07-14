@@ -5,7 +5,7 @@ from ca import generate_selfsigned_cert, get_public_key_object_from_cert_file, \
     get_private_key_object_from_private_byte, \
     sign, get_public_key_byte_from_cert_file, validate_sign
 from const import payer_id, merchant_id, payer_payment_request_port, blockchain_send_delegation_port,\
-    bank_send_preparation_port, bank_id, certs_path
+    bank_send_preparation_port, bank_id, certs_path, PRICE
 from utils import generate_nonce
 import socket, ssl, pickle
 
@@ -68,7 +68,9 @@ class Payer:
     def handle_delegation_ack(self, message):
         seq_number, signed_message, pub_cer_blockchain = message
         pub_block_chain = get_public_key_object_from_cert_file(pub_cer_blockchain)
-        if validate_sign(pub_block_chain, signed_message, seq_number):
+        if int(seq_number.decode()) != self.last_seq_number:
+            return False
+        elif validate_sign(pub_block_chain, signed_message, seq_number):
             self.last_seq_number += 1
             return True
 
@@ -76,14 +78,16 @@ class Payer:
         return False
 
     # we assume price value is always correct (user will check it by its knowledge)
-    #p2.2
+    # p2.2
     def handle_payment_request(self, payment_request):
         bill, signed_bill, merchant_pk_certificate = payment_request
-        self.payment_price = bill.decode().split("||")[1]
+        self.payment_price = int(bill.decode().split("||")[1])
         merchant_pk = get_public_key_object_from_cert_file(merchant_pk_certificate)
         self.merchant_pk = get_public_key_byte_from_cert_file(merchant_pk_certificate)
         nonce = int(bill.decode().split("||")[-1])
-        if validate_sign(merchant_pk, signed_bill, bill):
+        if self.payment_price != PRICE:
+            return False
+        elif validate_sign(merchant_pk, signed_bill, bill):
             return self.create_ack_payment_request(nonce + 1)
         return False
 

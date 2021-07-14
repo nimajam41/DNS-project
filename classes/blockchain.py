@@ -8,6 +8,7 @@ from collections import defaultdict
 from const import certs_path, blockchain_send_delegation_port
 from datetime import datetime
 import socket, ssl, pickle
+import uuid
 
 class BlockChain:
     def __init__(self, name='BlockChain'):
@@ -29,10 +30,11 @@ class BlockChain:
         self.public_key = get_public_key_object_from_cert_file(self.cert_pem)
         self.private_key = get_private_key_object_from_private_byte(private_key_byte)
         self.blocks = defaultdict(dict)
+        self.bank_transactions = defaultdict(int)  # key: pk_wallet + pk_bank , value: last transaction seq number
 
     def add_new_block(self, bank_public, wallet_public, policy):
         key = (bank_public, wallet_public)
-        if key in self.blocks and float(self.blocks[key]['timestamp']) > datetime.now().timestamp():
+        if key in self.blocks and self.blocks[key]['timestamp'] > datetime.now().timestamp():
             return False
         range, count, timestamp, seq_number = policy.split('||')
 
@@ -40,12 +42,22 @@ class BlockChain:
         if key in self.blocks and self.blocks[key]['seq_number'] != seq_number - 1:
             return False
         self.blocks[key] = {
-            'range': range,
-            'count': count,
-            'timestamp': timestamp,
+            'range': float(range),
+            'count': int(count),
+            'timestamp': float(timestamp),
             'seq_number': int(seq_number)
         }
         return True
+
+    def concession(self, pk_wallet, pk_bank, value):
+        key = (pk_bank, pk_wallet)
+        if key in self.blocks:
+            if self.blocks[key]['timestamp'] > datetime.now().timestamp() and self.blocks[key]['count'] > 0 and \
+                    self.blocks[key]['range'] > 0:
+                self.blocks[key]['count'] -= 1
+                self.blocks[key]['range'] -= value
+                return True
+        return False
 
     # p1.2
     def handle_delegation(self, delegation_message):
@@ -54,7 +66,7 @@ class BlockChain:
         wallet_pk_object = get_public_key_object_from_public_byte(pk_wallet_user)
 
         if not validate_sign(wallet_pk_object, signed_message,
-                               (pk_file_bank.decode() + "||" + policy.decode()).encode('utf-8')):
+                             (pk_file_bank.decode() + "||" + policy.decode()).encode('utf-8')):
             delegation_request_valid = False
         elif len(policy.decode().split('||')) != 4:
             delegation_request_valid = False
@@ -66,13 +78,35 @@ class BlockChain:
                 return ack_del
         else:
             return None
+
     # p1.2
     def ack_delegation(self, seq_number):
         message = (seq_number, sign(self.private_key, seq_number), self.cert_pem)
         return message
 
-    def concession(self):
-        pass
+    # p4.4
+    def perform_transaction(self, message):
+        is_valid = True
+        pk_wallet, pk_bank, transaction, signed_message = message
+        key = (pk_bank, pk_wallet)
+        crypto_amount, seq_number = transaction.decode().split("||")
+        if key in self.bank_transactions and int(seq_number) != 1 + self.bank_transactions[key]:
+            is_valid = False
+        self.bank_transactions[key] = seq_number
+        if not self.concession(pk_wallet, pk_bank, float(crypto_amount)):
+            is_valid = False
+        resp_to_bank = self.transaction_resp_to_bank(is_valid, seq_number)
+        return is_valid, resp_to_bank
+
+    # helper method for p4.4
+    def transaction_resp_to_bank(self, validate, seq_number):
+        if validate is True:
+            msg = "success" + str(uuid.uuid4().int) + "||" + str(seq_number)
+        else:
+            msg = "success" + str(uuid.uuid4().int) + "||" + str(seq_number)
+        return msg.encode("utf-8") , sign(self.private_key, msg.encode("utf-8")), self.cert_pem
+
+
 
     def run_delegation_server(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
