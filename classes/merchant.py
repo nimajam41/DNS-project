@@ -1,13 +1,29 @@
-from classes.ca import generate_selfsigned_cert, get_public_key_object_from_cert_file, \
+import os
+from ca import generate_selfsigned_cert, get_public_key_object_from_cert_file, \
     get_private_key_object_from_private_byte, \
     sign, get_public_key_byte_from_cert_file, validate_sign
-from classes.const import merchant_id, payer_id
-from classes.utils import generate_nonce
+from const import merchant_id, payer_id, certs_path
+from utils import generate_nonce
 
 
 class Merchant:
     def __init__(self, name='merchant'):
-        self.cert_pem, private_key_byte = generate_selfsigned_cert(subject_name=name)
+        self.key_path = certs_path + "payer.key"
+        self.cert_path = certs_path + "payer.cert"
+
+        if os.path.exists(self.key_path) and os.path.exists(self.cert_path):
+            with open(self.key_path, "rb") as f:
+                private_key_byte = f.read()
+            with open(self.cert_path, "rb") as f:
+                self.cert_pem = f.read()
+
+        else:
+            self.cert_pem, private_key_byte = generate_selfsigned_cert(subject_name=name)
+            with open(self.key_path, "w+b") as f:
+                f.write(private_key_byte)
+            with open(self.cert_path, "w+b") as f:
+                f.write(self.cert_pem)
+
         self.public_key = get_public_key_object_from_cert_file(self.cert_pem)
         self.private_key = get_private_key_object_from_private_byte(private_key_byte)
         self.payment_req_nonce = None
@@ -36,5 +52,8 @@ class Merchant:
 
 if __name__ == '__main__':
     m = Merchant()
+
+    #2.1
     x = m.create_payment_request(245000)
     print(x)
+

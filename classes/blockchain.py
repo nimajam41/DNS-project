@@ -10,20 +10,20 @@ import socket, ssl, pickle
 
 class BlockChain:
     def __init__(self, name='BlockChain'):
-        self.blockchain_key_path = certs_path + "blockchain.key"
-        self.blockchain_cert_path = certs_path + "blockchain.cert"
-        if os.path.exists(self.blockchain_key_path) and os.path.exists(self.blockchain_cert_path):
-            with open(self.blockchain_key_path, "rb") as f:
+        self.key_path = certs_path + "blockchain.key"
+        self.cert_path = certs_path + "blockchain.cert"
+        if os.path.exists(self.key_path) and os.path.exists(self.cert_path):
+            with open(self.key_path, "rb") as f:
                 private_key_byte = f.read()
-            with open(self.blockchain_cert_path, "rb") as f:
+            with open(self.cert_path, "rb") as f:
                 self.cert_pem = f.read()
 
         else:
             self.cert_pem, private_key_byte = generate_selfsigned_cert(subject_name=name)
 
-            with open(self.blockchain_key_path, "w+b") as f:
+            with open(self.key_path, "w+b") as f:
                 f.write(private_key_byte)
-            with open(self.blockchain_cert_path, "w+b") as f:
+            with open(self.cert_path, "w+b") as f:
                 f.write(self.cert_pem)
         self.public_key = get_public_key_object_from_cert_file(self.cert_pem)
         self.private_key = get_private_key_object_from_private_byte(private_key_byte)
@@ -72,10 +72,11 @@ class BlockChain:
     def concession(self):
         pass
 
+
 if __name__ == '__main__':
     block_chain = BlockChain()
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        sock = ssl.wrap_socket(s, keyfile=block_chain.blockchain_key_path, certfile=block_chain.blockchain_cert_path, server_side=True, do_handshake_on_connect=True)
+        sock = ssl.wrap_socket(s, keyfile=block_chain.key_path, certfile=block_chain.cert_path, server_side=True, do_handshake_on_connect=True)
         sock.bind(('localhost', 8001))
         sock.listen()
         while True:
@@ -89,6 +90,7 @@ if __name__ == '__main__':
                     delegation = pickle.loads(data)
                     ack = block_chain.handle_delegation(delegation)
                     if ack:
+                        print(ack)
                         conn.sendall(pickle.dumps(ack))
                     else:
                         conn.sendall(pickle.dumps("Invalid Request"))
