@@ -4,7 +4,7 @@ import socket, ssl, pickle
 from ca import generate_selfsigned_cert, get_public_key_object_from_cert_file, \
     get_private_key_object_from_private_byte, \
     sign, get_public_key_byte_from_cert_file, validate_sign
-from const import merchant_id, payer_id, payer_payment_request_port, certs_path, bank_id
+from const import merchant_id, payer_id, payer_payment_request_port, certs_path, bank_id, bank_get_confirmation_port
 from utils import generate_nonce
 
 
@@ -77,8 +77,9 @@ class Merchant:
     # p5.3
     def handle_response_payment_confirmation(self, message):
         is_valid = True
+        print(message)
         res, signed_res, cert_bank = message
-        b_id, received_nonce, amount = res
+        b_id, received_nonce, amount = res.decode().split("||")
         if b_id != bank_id:
             is_valid = False
         elif int(received_nonce) != 1 + self.payment_confirmation_nonce:
@@ -86,12 +87,29 @@ class Merchant:
         elif not validate_sign(get_public_key_object_from_cert_file(cert_bank), signed_res, res):
             is_valid = False
         if not is_valid:
-            return False, None
-        return True, 'end of protocol'
+            return False
+        return 'end of protocol'
 
+    def send_confirmation_request_to_bank(self, payment_confirmation):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            ssl_sock = ssl.wrap_socket(sock)
+            ssl_sock.connect(('localhost', bank_get_confirmation_port))
+            ssl_sock.sendall(pickle.dumps(payment_confirmation))
+            res = ssl_sock.recv(4096)
+            ack = pickle.loads(res)
+            if not ack == "Invalid Request":
+                return self.handle_response_payment_confirmation(ack)
+            else:
+                print("Invalid Confirmation Request")
+                return False
 
 if __name__ == '__main__':
     m = Merchant()
     payment = m.create_payment_request(245000)
     if m.send_payment_to_payer(payment):
         print(f"Payment request succeeded.")
+
+    payment_confirmation = m.request_payment_confirmation()
+    result = m.send_confirmation_request_to_bank(payment_confirmation)
+    if result:
+        print(result)

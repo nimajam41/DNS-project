@@ -131,7 +131,7 @@ class Payer:
                 print("Invalid Delegation Request")
                 return False
 
-    def send_preparation_to_blockchain(self, preparation):
+    def send_preparation_to_bank(self, preparation):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             ssl_sock = ssl.wrap_socket(sock)
             ssl_sock.connect(('localhost', bank_send_preparation_port))
@@ -142,6 +142,7 @@ class Payer:
                 ack_ack = self.ack_ack_payment_preparation(ack)
                 if ack_ack:
                     ssl_sock.sendall(pickle.dumps(ack_ack))
+                    print("Send payment preparation succeeded.")
                 else:
                     ssl_sock.sendall(pickle.dumps("Invalid Ack"))
 
@@ -166,7 +167,7 @@ class Payer:
                     if ack:
                         conn.sendall(pickle.dumps(ack))
                         preparation = self.create_payment_preparation()
-                        self.send_preparation_to_blockchain(preparation)
+                        self.send_preparation_to_bank(preparation)
 
                     else:
                         conn.sendall(pickle.dumps("Invalid Request"))

@@ -6,7 +6,7 @@ import random
 from ca import generate_selfsigned_cert, get_public_key_object_from_cert_file, \
     get_private_key_object_from_private_byte, \
     sign, get_public_key_byte_from_cert_file, validate_sign
-from const import merchant_id, payer_id, bank_id, certs_path, bank_send_preparation_port
+from const import merchant_id, payer_id, bank_id, certs_path, bank_send_preparation_port, bank_get_confirmation_port
 from utils import generate_nonce
 
 
@@ -95,11 +95,29 @@ class Bank:
         elif not validate_sign(get_public_key_object_from_cert_file(cert_merchant), signed_req, req):
             is_valid = False
         if not is_valid:
-            return False, None
+            return False
         res = bank_id + "||" + str(int(nonce) + 1) + "||" + str(random.randint(0, 100000))
-        return True, res.encode('utf-8'), sign(self.private_key, res.encode('utf-8')), self.cert_pem
+        return res.encode('utf-8'), sign(self.private_key, res.encode('utf-8')), self.cert_pem
 
-
+    def run_payment_confirmation_server(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            ssl_sock = ssl.wrap_socket(sock, keyfile=self.key_path,
+                                       certfile=self.cert_path, server_side=True,
+                                       do_handshake_on_connect=True)
+            ssl_sock.bind(('localhost', bank_get_confirmation_port))
+            ssl_sock.listen()
+            while True:
+                conn, addr = ssl_sock.accept()
+                with conn:
+                    print(f'Connected by {addr} to receive payment confirmation')
+                    data = conn.recv(4096)
+                    payment_confirmation = pickle.loads(data)
+                    ack = self.response_payment_confirmation(payment_confirmation)
+                    if ack:
+                        conn.sendall(pickle.dumps(ack))
+                    else:
+                        conn.sendall(pickle.dumps("Invalid Request"))
 if __name__ == "__main__":
     bank = Bank()
     Thread(target=bank.run_payment_preparation_server).start()
+    Thread(target=bank.run_payment_confirmation_server).start()
