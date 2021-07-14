@@ -11,20 +11,20 @@ import socket, ssl, pickle
 
 class BlockChain:
     def __init__(self, name='BlockChain'):
-        self.blockchain_key_path = certs_path + "blockchain.key"
-        self.blockchain_cert_path = certs_path + "blockchain.cert"
-        if os.path.exists(self.blockchain_key_path) and os.path.exists(self.blockchain_cert_path):
-            with open(self.blockchain_key_path, "rb") as f:
+        self.key_path = certs_path + "blockchain.key"
+        self.cert_path = certs_path + "blockchain.cert"
+        if os.path.exists(self.key_path) and os.path.exists(self.cert_path):
+            with open(self.key_path, "rb") as f:
                 private_key_byte = f.read()
-            with open(self.blockchain_cert_path, "rb") as f:
+            with open(self.cert_path, "rb") as f:
                 self.cert_pem = f.read()
 
         else:
             self.cert_pem, private_key_byte = generate_selfsigned_cert(subject_name=name)
 
-            with open(self.blockchain_key_path, "w+b") as f:
+            with open(self.key_path, "w+b") as f:
                 f.write(private_key_byte)
-            with open(self.blockchain_cert_path, "w+b") as f:
+            with open(self.cert_path, "w+b") as f:
                 f.write(self.cert_pem)
         self.public_key = get_public_key_object_from_cert_file(self.cert_pem)
         self.private_key = get_private_key_object_from_private_byte(private_key_byte)
@@ -47,6 +47,7 @@ class BlockChain:
         }
         return True
 
+    # p1.2
     def handle_delegation(self, delegation_message):
         delegation_request_valid = True
         pk_file_bank, pk_wallet_user, policy, signed_message = delegation_message
@@ -65,7 +66,7 @@ class BlockChain:
                 return ack_del
         else:
             return None
-
+    # p1.2
     def ack_delegation(self, seq_number):
         message = (seq_number, sign(self.private_key, seq_number), self.cert_pem)
         return message

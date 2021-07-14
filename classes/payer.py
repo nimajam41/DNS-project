@@ -4,10 +4,8 @@ from threading import Thread
 from ca import generate_selfsigned_cert, get_public_key_object_from_cert_file, \
     get_private_key_object_from_private_byte, \
     sign, get_public_key_byte_from_cert_file, validate_sign
-from const import payer_id, merchant_id, payer_payment_request_port
+from const import payer_id, merchant_id, payer_payment_request_port, bank_id, certs_path
 from utils import generate_nonce
-
-from const import payer_id, blockchain_send_delegation_port, certs_path
 import socket, ssl, pickle
 
 class Payer:
@@ -53,10 +51,10 @@ class Payer:
         self.last_seq_number = last_seq_number
         self.merchant_pk = None
         self.payment_preparation_nonce1 = None
-        self.payment_preparation_nonce2 = None
         self.payment_price = None
 
     # we assume we have bank's pk
+    # p1.1
     def create_delegation(self, range, count, timestamp, bank_public_key_file):
         policy = str(range) + "||" + str(count) + "||" + str(timestamp) + "||" + str(self.last_seq_number)
         policy = policy.encode('utf-8')
@@ -65,6 +63,7 @@ class Payer:
         return (
             bank_public_key_file, self.public_key_wallet_byte, policy, sign(self.private_key_wallet, message_to_sign))
 
+    #p1.3
     def handle_delegation_ack(self, message):
         seq_number, signed_message, pub_cer_blockchain = message
         pub_block_chain = get_public_key_object_from_cert_file(pub_cer_blockchain)
@@ -76,6 +75,7 @@ class Payer:
         return False
 
     # we assume price value is always correct (user will check it by its knowledge)
+    #p2.2
     def handle_payment_request(self, payment_request):
         bill, signed_bill, merchant_pk_certificate = payment_request
         self.payment_price = bill.decode().split("||")
@@ -87,10 +87,12 @@ class Payer:
         return False
 
     # اینجا ورودیش در اصل nonce+1 فانکشن بالاست
+    # p2.2
     def create_ack_payment_request(self, nonce):
         message = (payer_id + "||" + str(nonce)).encode('utf-8')
         return message, sign(self.private_key, message), self.cert_pem
 
+    # p3.1
     def create_payment_preparation(self):
         nonce1 = str(generate_nonce())
         payment = payer_id + "||" + merchant_id + "||" + get_public_key_byte_from_cert_file(
@@ -98,6 +100,22 @@ class Payer:
         message = payment.encode('utf-8'), sign(self.private_key, payment.encode('utf-8')), self.cert_pem
         self.payment_preparation_nonce1 = nonce1
         return message
+    # p3.4
+    def ack_ack_payment_preparation(self, message):
+        is_valid = True
+        verification_ack, signed_verification, cert_bank = message
+        b_id, nonce1, nonce2 = verification_ack
+        if b_id != bank_id:
+            is_valid = False
+        if int(nonce1) - 1 != int(self.payment_preparation_nonce1):
+            is_valid = False
+        if not validate_sign(get_public_key_object_from_cert_file(cert_bank), signed_verification, verification_ack):
+            is_valid = False
+        if not is_valid:
+            return False, None
+
+        verify_part = payer_id + "||" + str(int(nonce2) + 1)
+        return True, verify_part.encode('uft-8'), sign(self.private_key, verify_part.encode('utf-8')), self.cert_pem
 
     def send_delegation_to_blockchain(self, delegation):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
