@@ -1,16 +1,51 @@
-from classes.ca import generate_selfsigned_cert, get_public_key_object_from_cert_file, \
+import os
+
+from ca import generate_selfsigned_cert, get_public_key_object_from_cert_file, \
     get_private_key_object_from_private_byte, \
     sign, get_public_key_byte_from_cert_file, validate_sign
 from classes.const import cert_file, payer_id, merchant_id
 from classes.utils import generate_nonce
 
+from const import pk_bank_byte, payer_id, blockchain_port, certs_path
+import socket, ssl, pickle
 
 class Payer:
     def __init__(self, name='payer', last_seq_number=1):
-        self.cert_pem, private_key_byte = generate_selfsigned_cert(subject_name=name)
+        self.payer_key_path = certs_path + "payer.key"
+        self.payer_cert_path = certs_path + "payer.cert"
+        if os.path.exists(self.payer_key_path) and os.path.exists(self.payer_cert_path):
+            with open(self.payer_key_path, "rb") as f:
+                private_key_byte = f.read()
+            with open(self.payer_cert_path, "rb") as f:
+                self.cert_pem = f.read()
+
+        else:
+            self.cert_pem, private_key_byte = generate_selfsigned_cert(subject_name=name)
+
+            with open(self.payer_key_path, "w+b") as f:
+                f.write(private_key_byte)
+            with open(self.payer_cert_path, "w+b") as f:
+                f.write(self.cert_pem)
+
         self.public_key = get_public_key_object_from_cert_file(self.cert_pem)
         self.private_key = get_private_key_object_from_private_byte(private_key_byte)
-        self.cert_pem_wallet, private_key_file_wallet = generate_selfsigned_cert(subject_name='wallet_' + name)
+
+        self.wallet_payer_key_path = certs_path + "wallet_payer.key"
+        self.wallet_payer_cert_path = certs_path + "wallet_payer.cert"
+        if os.path.exists(self.wallet_payer_key_path) and os.path.exists(self.wallet_payer_cert_path):
+            with open(self.wallet_payer_key_path, "rb") as f:
+                private_key_file_wallet = f.read()
+            with open(self.wallet_payer_cert_path, "rb") as f:
+                self.cert_pem_wallet = f.read()
+
+        else:
+            self.cert_pem_wallet, private_key_file_wallet = generate_selfsigned_cert(subject_name='wallet_' + name)
+
+            with open(self.wallet_payer_key_path, "wb") as f:
+                f.write(private_key_file_wallet)
+            with open(self.wallet_payer_cert_path, "wb") as f:
+                f.write(self.cert_pem_wallet)
+
         self.public_key_wallet_byte = get_public_key_byte_from_cert_file(self.cert_pem_wallet)
         self.public_key_wallet = get_public_key_object_from_cert_file(self.cert_pem_wallet)
         self.private_key_wallet = get_private_key_object_from_private_byte(private_key_file_wallet)
@@ -66,14 +101,14 @@ class Payer:
 
 if __name__ == '__main__':
     p = Payer()
-
-    # test_delegation
-    print(p.create_delegation(200, 2, 18526220589.27749, get_public_key_byte_from_cert_file(cert_file)))
-    pk_file, pk_wallet, policy, signed = p.create_delegation(200, 2, 1856220589.27749, get_public_key_byte_from_cert_file(cert_file))
-    print(pk_file)
-    print(pk_wallet)
-    print(policy)
-    print(signed)
-    # mock validate signed message
-    print(validate_sign(p.public_key_wallet, signed, (pk_file.decode() + "||" + policy.decode()).encode('utf-8')))
-    print(p.create_ack_payment_request(39641666885011228165121973487207563482772189403438097948115230426323320347919))
+    delegation = p.create_delegation(200, 2, 18526220589.27749, pk_bank_byte)
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        s = ssl.wrap_socket(sock)
+        s.connect(('localhost', blockchain_port))
+        s.sendall(pickle.dumps(delegation))
+        res = s.recv(4096)
+        ack = pickle.loads(res)
+        if not ack == "Invalid Request":
+            print(ack[2].decode())
+        else:
+            print("Invalid Delegation Request")
