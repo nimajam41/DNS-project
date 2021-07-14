@@ -1,12 +1,13 @@
 import os
+from threading import Thread
 
 from ca import generate_selfsigned_cert, get_public_key_object_from_cert_file, \
     get_private_key_object_from_private_byte, \
     sign, get_public_key_byte_from_cert_file, validate_sign
-from const import payer_id, merchant_id
+from const import payer_id, merchant_id, payer_payment_request_port
 from utils import generate_nonce
 
-from const import payer_id, blockchain_port, certs_path
+from const import payer_id, blockchain_send_delegation_port, certs_path
 import socket, ssl, pickle
 
 class Payer:
@@ -82,8 +83,8 @@ class Payer:
         self.merchant_pk = get_public_key_byte_from_cert_file(merchant_pk_certificate)
         nonce = int(bill.decode().split("||")[-1])
         if validate_sign(merchant_pk, signed_bill, bill):
-            return True, self.create_ack_payment_request(nonce + 1)
-        return False, None
+            return self.create_ack_payment_request(nonce + 1)
+        return False
 
     # اینجا ورودیش در اصل nonce+1 فانکشن بالاست
     def create_ack_payment_request(self, nonce):
@@ -98,19 +99,46 @@ class Payer:
         self.payment_preparation_nonce1 = nonce1
         return message
 
+    def send_delegation_to_blockchain(self, delegation):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            ssl_sock = ssl.wrap_socket(sock)
+            ssl_sock.connect(('localhost', blockchain_send_delegation_port))
+            ssl_sock.sendall(pickle.dumps(delegation))
+            res = ssl_sock.recv(4096)
+            ack = pickle.loads(res)
+            if not ack == "Invalid Request":
+                return self.handle_delegation_ack(ack)
+            else:
+                print("Invalid Delegation Request")
+                return False
+
+    def run_payment_request_server(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            ssl_sock = ssl.wrap_socket(sock, keyfile=self.payer_key_path,
+                                   certfile=self.payer_cert_path, server_side=True,
+                                   do_handshake_on_connect=True)
+            ssl_sock.bind(('localhost', payer_payment_request_port))
+            ssl_sock.listen()
+            while True:
+                conn, addr = ssl_sock.accept()
+                with conn:
+                    print(f'Connected by {addr} to receive payment request')
+                    data = conn.recv(4096)
+                    payment_request = pickle.loads(data)
+                    ack = self.handle_payment_request(payment_request)
+                    if ack != (False, None):
+                        conn.sendall(pickle.dumps(ack))
+                    else:
+                        conn.sendall(pickle.dumps("Invalid Request"))
+
 
 if __name__ == '__main__':
     p = Payer()
-    with open(certs_path + "bank.cert", "rb") as f:
-        pk_bank = f.read()
-    delegation = p.create_delegation(200, 2, 18526220589.27749, pk_bank)
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        s = ssl.wrap_socket(sock)
-        s.connect(('localhost', blockchain_port))
-        s.sendall(pickle.dumps(delegation))
-        res = s.recv(4096)
-        ack = pickle.loads(res)
-        if not ack == "Invalid Request":
-            print(ack[2].decode())
-        else:
-            print("Invalid Delegation Request")
+    thread = Thread(target=p.run_payment_request_server)
+    thread.start()
+
+    # with open(certs_path + "bank.cert", "rb") as f:
+    #     pk_bank = f.read()
+    # delegation = p.create_delegation(200, 2, 18526220589.27749, pk_bank)
+    # if p.send_delegation_to_blockchain(delegation):
+    #     print(f"Delegation succeeded.")

@@ -1,10 +1,11 @@
 import os
+from threading import Thread
 
 from ca import generate_selfsigned_cert, get_public_key_object_from_cert_file, \
     get_private_key_object_from_private_byte, \
     sign, get_public_key_byte_from_cert_file, validate_sign, get_public_key_object_from_public_byte
 from collections import defaultdict
-from const import certs_path
+from const import certs_path, blockchain_send_delegation_port
 from datetime import datetime
 import socket, ssl, pickle
 
@@ -72,23 +73,28 @@ class BlockChain:
     def concession(self):
         pass
 
-if __name__ == '__main__':
-    block_chain = BlockChain()
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        sock = ssl.wrap_socket(s, keyfile=block_chain.blockchain_key_path, certfile=block_chain.blockchain_cert_path, server_side=True, do_handshake_on_connect=True)
-        sock.bind(('localhost', 8001))
-        sock.listen()
-        while True:
-            conn, addr = sock.accept()
-            with conn:
-                print('Connected by', addr)
-                while True:
+    def run_delegation_server(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            ssl_sock = ssl.wrap_socket(sock, keyfile=self.blockchain_key_path,
+                                       certfile=self.blockchain_cert_path, server_side=True,
+                                       do_handshake_on_connect=True)
+            ssl_sock.bind(('localhost', blockchain_send_delegation_port))
+            ssl_sock.listen()
+            while True:
+                conn, addr = ssl_sock.accept()
+                with conn:
+                    print(f'Connected by {addr} to send delegation')
                     data = conn.recv(4096)
-                    if not data:
-                        break
                     delegation = pickle.loads(data)
-                    ack = block_chain.handle_delegation(delegation)
+                    ack = self.handle_delegation(delegation)
                     if ack:
                         conn.sendall(pickle.dumps(ack))
                     else:
                         conn.sendall(pickle.dumps("Invalid Request"))
+
+
+if __name__ == '__main__':
+    block_chain = BlockChain()
+    thread = Thread(target=block_chain.run_delegation_server())
+    thread.start()
+
