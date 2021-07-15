@@ -9,4 +9,6 @@ blockchain_send_delegation_port = 8001
 payer_payment_request_port = 8002
 bank_send_preparation_port = 8003
 bank_get_confirmation_port = 8004
+exchange_get_price_port = 8005
+blockchain_send_transaction_port = 8006
 PRICE = 1000

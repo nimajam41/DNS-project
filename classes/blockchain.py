@@ -5,7 +5,7 @@ from ca import generate_selfsigned_cert, get_public_key_object_from_cert_file, \
     get_private_key_object_from_private_byte, \
     sign, get_public_key_byte_from_cert_file, validate_sign, get_public_key_object_from_public_byte
 from collections import defaultdict
-from const import certs_path, blockchain_send_delegation_port
+from const import certs_path, blockchain_send_delegation_port, blockchain_send_transaction_port
 from datetime import datetime
 import socket, ssl, pickle
 import uuid
@@ -50,7 +50,7 @@ class BlockChain:
         return True
 
     def concession(self, pk_wallet, pk_bank, value):
-        key = (pk_bank, pk_wallet)
+        key = (pk_bank.decode('utf-8'), pk_wallet.decode('utf-8'))
         if key in self.blocks:
             if self.blocks[key]['timestamp'] > datetime.now().timestamp() and self.blocks[key]['count'] > 0 and \
                     self.blocks[key]['range'] > 0:
@@ -90,7 +90,7 @@ class BlockChain:
         pk_wallet, pk_bank, transaction, signed_message = message
         key = (pk_bank, pk_wallet)
         crypto_amount, seq_number = transaction.decode().split("||")
-        if key in self.bank_transactions and int(seq_number) != 1 + self.bank_transactions[key]:
+        if key in self.bank_transactions and int(seq_number) != 1 + int(self.bank_transactions[key]):
             is_valid = False
         self.bank_transactions[key] = seq_number
         if not self.concession(pk_wallet, pk_bank, float(crypto_amount)):
@@ -110,8 +110,8 @@ class BlockChain:
 
     def run_delegation_server(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            ssl_sock = ssl.wrap_socket(sock, keyfile=self.blockchain_key_path,
-                                       certfile=self.blockchain_cert_path, server_side=True,
+            ssl_sock = ssl.wrap_socket(sock, keyfile=self.key_path,
+                                       certfile=self.cert_path, server_side=True,
                                        do_handshake_on_connect=True)
             ssl_sock.bind(('localhost', blockchain_send_delegation_port))
             ssl_sock.listen()
@@ -127,9 +127,29 @@ class BlockChain:
                     else:
                         conn.sendall(pickle.dumps("Invalid Request"))
 
+    def run_transaction_server(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            ssl_sock = ssl.wrap_socket(sock, keyfile=self.key_path,
+                                       certfile=self.cert_path, server_side=True,
+                                       do_handshake_on_connect=True)
+            ssl_sock.bind(('localhost', blockchain_send_transaction_port))
+            ssl_sock.listen()
+            while True:
+                conn, addr = ssl_sock.accept()
+                with conn:
+                    print(f'Connected by {addr} to send transaction')
+                    data = conn.recv(4096)
+                    transaction = pickle.loads(data)
+                    is_valid, ack = self.perform_transaction(transaction)
+                    if is_valid:
+                        conn.sendall(pickle.dumps(ack))
+                    else:
+                        conn.sendall(pickle.dumps("Invalid Request"))
+
 
 if __name__ == '__main__':
     block_chain = BlockChain()
-    thread = Thread(target=block_chain.run_delegation_server())
-    thread.start()
+    Thread(target=block_chain.run_delegation_server).start()
+    Thread(target=block_chain.run_transaction_server).start()
+
 
