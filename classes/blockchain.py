@@ -39,7 +39,7 @@ class BlockChain:
         range, count, timestamp, seq_number = policy.split('||')
 
         # possibly replay attack (we are waiting for last_seq_number + 1)
-        if key in self.blocks and self.blocks[key]['seq_number'] != seq_number - 1:
+        if key in self.blocks and self.blocks[key]['seq_number'] != int(seq_number) - 1:
             return False
         self.blocks[key] = {
             'range': float(range),
@@ -53,7 +53,7 @@ class BlockChain:
         key = (pk_bank.decode('utf-8'), pk_wallet.decode('utf-8'))
         if key in self.blocks:
             if self.blocks[key]['timestamp'] > datetime.now().timestamp() and self.blocks[key]['count'] > 0 and \
-                    self.blocks[key]['range'] > 0:
+                    self.blocks[key]['range'] >= value:
                 self.blocks[key]['count'] -= 1
                 self.blocks[key]['range'] -= value
                 return True
