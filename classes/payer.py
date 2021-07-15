@@ -100,8 +100,8 @@ class Payer:
     # p3.1
     def create_payment_preparation(self):
         nonce1 = str(generate_nonce())
-        payment = payer_id + "||" + merchant_id + "||" + get_public_key_byte_from_cert_file(self.cert_pem_wallet).decode() + "||" + self.merchant_pk.decode()
-        payment = payment + "||" + self.payment_price + "||" + nonce1
+        payment = payer_id + "||" + merchant_id + "||" + get_public_key_byte_from_cert_file(self.cert_pem_wallet).decode() + "||" + self.merchant_pk.decode() \
+                  + "||" + str(self.payment_price) + "||" + nonce1
         message = payment.encode('utf-8'), sign(self.private_key, payment.encode('utf-8')), self.cert_pem
         self.payment_preparation_nonce1 = nonce1
         return message
@@ -179,11 +179,12 @@ class Payer:
 
 if __name__ == '__main__':
     p = Payer()
+    with open(certs_path + "bank.cert", "rb") as f:
+        pk_bank = f.read()
+    delegation = p.create_delegation(200, 2, 18526220589.27749, get_public_key_byte_from_cert_file(pk_bank))
+    if p.send_delegation_to_blockchain(delegation):
+        print(f"Delegation succeeded.")
     thread = Thread(target=p.run_payment_request_server)
     thread.start()
 
-    # with open(certs_path + "bank.cert", "rb") as f:
-    #     pk_bank = f.read()
-    # delegation = p.create_delegation(200, 2, 18526220589.27749, pk_bank)
-    # if p.send_delegation_to_blockchain(delegation):
-    #     print(f"Delegation succeeded.")
+

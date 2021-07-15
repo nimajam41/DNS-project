@@ -4,7 +4,8 @@ import socket, ssl, pickle
 from ca import generate_selfsigned_cert, get_public_key_object_from_cert_file, \
     get_private_key_object_from_private_byte, \
     sign, get_public_key_byte_from_cert_file, validate_sign
-from const import merchant_id, payer_id, payer_payment_request_port, certs_path, bank_id, bank_get_confirmation_port
+from const import merchant_id, payer_id, payer_payment_request_port, certs_path, bank_id, bank_get_confirmation_port, \
+    PRICE
 from utils import generate_nonce
 
 
@@ -88,7 +89,7 @@ class Merchant:
             is_valid = False
         if not is_valid:
             return False
-        return 'end of protocol'
+        return 'Current balance fetched'
 
     def send_confirmation_request_to_bank(self, payment_confirmation):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -105,7 +106,7 @@ class Merchant:
 
 if __name__ == '__main__':
     m = Merchant()
-    payment = m.create_payment_request(245000)
+    payment = m.create_payment_request(PRICE)
     if m.send_payment_to_payer(payment):
         print(f"Payment request succeeded.")
 

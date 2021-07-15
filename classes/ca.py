@@ -23,7 +23,6 @@ def generate_selfsigned_cert(hostname='root', ip_addresses=None, key=None, subje
         x509.NameAttribute(NameOID.COMMON_NAME, hostname)
     ])
 
-    # best practice seem to be to include the hostname in the SAN, which *SHOULD* mean COMMON_NAME is ignored.
     alt_names = [x509.DNSName(hostname)]
 
     if ip_addresses:
@@ -70,8 +69,10 @@ def get_public_key_byte_from_cert_file(cert: x509.Certificate):
 def get_public_key_object_from_cert_file(cert: x509.Certificate):
     return x509.load_pem_x509_certificate(cert, backend=default_backend()).public_key()
 
+
 def get_public_key_object_from_public_byte(key):
     return serialization.load_pem_public_key(key, backend=default_backend())
+
 
 # return private_key object to work with
 def get_private_key_object_from_private_byte(key_pem):

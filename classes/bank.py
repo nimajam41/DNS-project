@@ -6,7 +6,8 @@ import random
 from ca import generate_selfsigned_cert, get_public_key_object_from_cert_file, \
     get_private_key_object_from_private_byte, \
     sign, get_public_key_byte_from_cert_file, validate_sign
-from const import merchant_id, payer_id, bank_id, certs_path, bank_send_preparation_port, bank_get_confirmation_port
+from const import merchant_id, payer_id, bank_id, certs_path, bank_send_preparation_port, bank_get_confirmation_port, \
+    exchange_get_price_port, blockchain_send_transaction_port
 from utils import generate_nonce
 from datetime import datetime, timedelta
 
@@ -32,6 +33,7 @@ class Bank:
         self.private_key = get_private_key_object_from_private_byte(private_key_byte)
         self.merchant_pk = None
         self.payment_preparation_nonce2 = None
+        self.fiat_price = None
         self.resp_price_nonce = None
         self.transaction_seq_number = 1
         public_wallet_payer_path = certs_path + "wallet_payer.cert"
@@ -50,6 +52,7 @@ class Bank:
         payment = payment.decode().split("||")
         p_id = payment[0]
         m_id = payment[1]
+        self.fiat_price = int(payment[4])
         if p_id != payer_id or m_id != merchant_id:
             valid_message = False
         if not valid_message:
@@ -68,6 +71,38 @@ class Bank:
         if not is_valid:
             return False
         return 'we move to the next stage #p4'
+
+    def send_transaction_to_blockchain(self, transaction):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            ssl_sock = ssl.wrap_socket(sock)
+            ssl_sock.connect(('localhost', blockchain_send_transaction_port))
+            ssl_sock.sendall(pickle.dumps(transaction))
+            res = ssl_sock.recv(4096)
+            ack = pickle.loads(res)
+            if not ack == "Invalid Request":
+                return self.handle_transaction_resp(ack)
+            else:
+                print("Invalid Transaction")
+                return False
+
+    def send_price_request_to_exchange(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            ssl_sock = ssl.wrap_socket(sock)
+            ssl_sock.connect(('localhost', exchange_get_price_port))
+            price_request = self.request_price(self.fiat_price)
+            ssl_sock.sendall(pickle.dumps(price_request))
+            res = ssl_sock.recv(4096)
+            ack = pickle.loads(res)
+            if not ack == "Invalid Request":
+                transaction = self.request_transaction(ack)
+                if not transaction:
+                    print("Invalid Price Request")
+                    return False
+                else:
+                    return self.send_transaction_to_blockchain(transaction)
+            else:
+                print("Invalid Price Request")
+                return False
 
     def run_payment_preparation_server(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -88,7 +123,8 @@ class Bank:
                         data = conn.recv(4096)
                         ack_data = pickle.loads(data)
                         ack_ack = self.handle_ack_ack_payment_preparation(ack_data)
-                        print(ack_ack)
+                        if ack_ack:
+                            self.send_price_request_to_exchange()
                     else:
                         conn.sendall(pickle.dumps("Invalid Request"))
 
@@ -105,27 +141,28 @@ class Bank:
         crypto_amount, nonce = msg.decode().split("||")
         if int(nonce) != 1 + self.resp_price_nonce:
             is_valid = False
-        elif validate_sign(get_public_key_object_from_cert_file(cert_exchange), signed_msg, msg):
+        elif not validate_sign(get_public_key_object_from_cert_file(cert_exchange), signed_msg, msg):
             is_valid = False
         if not is_valid:
-            return False, None
+            return False
         transaction = crypto_amount + "||" + str(self.transaction_seq_number)
-        return True, self.public_wallet_payer, get_public_key_byte_from_cert_file(self.cert_pem), transaction.encode(
-            "utf-8"), sign(self.private_key, self.public_wallet_payer + "||" + transaction)
+        return self.public_wallet_payer, get_public_key_byte_from_cert_file(self.cert_pem), transaction.encode(
+            "utf-8"), sign(self.private_key, (self.public_wallet_payer.decode() + "||" + transaction).encode('utf-8'))
 
     def handle_transaction_resp(self, msg):
         is_valid = True
         msg, signed_msg, cert_blockchain = msg
         status, seq_number = msg.decode().split("||")
         # status handle transaction between payer and merchant inside bank
-        if seq_number != self.transaction_seq_number:
+        if int(seq_number) != self.transaction_seq_number:
             is_valid = False
         elif not validate_sign(get_public_key_object_from_cert_file(cert_blockchain), signed_msg, msg):
             is_valid = False
         if not is_valid:
-            return False, None
+            return False
         self.transaction_seq_number += 1
-        return True, "moving to 5th stage"
+        print(f"{self.fiat_price} dollars has moved to merchant {merchant_id}'s account")
+        return "moving to 5th stage"
 
 
     # p5.2
@@ -160,6 +197,8 @@ class Bank:
                         conn.sendall(pickle.dumps(ack))
                     else:
                         conn.sendall(pickle.dumps("Invalid Request"))
+
+
 if __name__ == "__main__":
     bank = Bank()
     Thread(target=bank.run_payment_preparation_server).start()
